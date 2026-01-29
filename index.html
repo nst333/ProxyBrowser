@@ -1,0 +1,824 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Mini Proxy-ish Browser (Single File)</title>
+  <style>
+    :root{
+      --bg:#0b0f14; --panel:#111826; --panel2:#0f1622; --text:#e8eef6;
+      --muted:#9fb0c4; --accent:#4cc2ff; --danger:#ff5c7a; --ok:#52ffa8;
+      --border: rgba(255,255,255,.08);
+      --shadow: 0 12px 40px rgba(0,0,0,.35);
+      --radius: 14px;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+      --sans: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Noto Sans KR", Arial, "Apple SD Gothic Neo", sans-serif;
+    }
+    *{box-sizing:border-box}
+    html,body{height:100%}
+    body{
+      margin:0; font-family:var(--sans);
+      background: radial-gradient(900px 450px at 20% 10%, rgba(76,194,255,.16), transparent 60%),
+                  radial-gradient(700px 350px at 80% 0%, rgba(82,255,168,.10), transparent 55%),
+                  linear-gradient(180deg, #070a0f, var(--bg));
+      color:var(--text);
+      overflow:hidden;
+    }
+    .app{
+      height:100%;
+      display:grid;
+      grid-template-rows: auto 1fr;
+      gap: 10px;
+      padding: 12px;
+    }
+    .topbar{
+      background: linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+      border:1px solid var(--border);
+      box-shadow: var(--shadow);
+      border-radius: var(--radius);
+      padding: 10px;
+      display:flex;
+      gap:10px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .btn{
+      background: rgba(255,255,255,.06);
+      color: var(--text);
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding: 9px 10px;
+      cursor:pointer;
+      user-select:none;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+      transition: transform .05s ease, background .15s ease, border-color .15s ease;
+      font-weight:600;
+    }
+    .btn:hover{background: rgba(255,255,255,.09)}
+    .btn:active{transform: translateY(1px)}
+    .btn[disabled]{opacity:.45; cursor:not-allowed}
+    .pill{
+      border-radius: 999px;
+      padding: 6px 10px;
+      border:1px solid var(--border);
+      background: rgba(255,255,255,.04);
+      color: var(--muted);
+      font-size: 12px;
+      display:inline-flex;
+      gap:8px;
+      align-items:center;
+    }
+    .addr{
+      flex: 1 1 520px;
+      min-width: 260px;
+      display:flex;
+      gap:8px;
+      align-items:center;
+    }
+    input[type="text"]{
+      width:100%;
+      background: rgba(0,0,0,.25);
+      border:1px solid var(--border);
+      color: var(--text);
+      border-radius: 12px;
+      padding: 10px 12px;
+      outline:none;
+      font-size: 14px;
+    }
+    input[type="text"]:focus{border-color: rgba(76,194,255,.45); box-shadow: 0 0 0 4px rgba(76,194,255,.12)}
+    .small{
+      font-size:12px;
+      color: var(--muted);
+      white-space:nowrap;
+    }
+    .right{
+      display:flex;
+      gap:8px;
+      align-items:center;
+      flex-wrap:wrap;
+    }
+    .toggle{
+      display:flex;
+      border:1px solid var(--border);
+      border-radius: 12px;
+      overflow:hidden;
+      background: rgba(0,0,0,.18);
+    }
+    .toggle button{
+      border:0;
+      padding: 9px 12px;
+      cursor:pointer;
+      color: var(--muted);
+      background: transparent;
+      font-weight:700;
+    }
+    .toggle button.active{
+      background: rgba(76,194,255,.18);
+      color: var(--text);
+    }
+
+    .main{
+      display:grid;
+      grid-template-columns: 320px 1fr;
+      gap: 10px;
+      min-height:0;
+    }
+    .side{
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      overflow:hidden;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+    }
+    .side header{
+      padding: 10px 12px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      gap:10px;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), transparent);
+    }
+    .side .content{
+      padding: 10px 12px;
+      overflow:auto;
+      min-height:0;
+    }
+    .section{margin-bottom:14px}
+    .section h3{
+      margin: 10px 0 8px;
+      font-size: 13px;
+      color: var(--muted);
+      letter-spacing:.2px;
+    }
+    .list{
+      display:flex; flex-direction:column; gap:8px;
+    }
+    .item{
+      border:1px solid var(--border);
+      border-radius: 12px;
+      padding: 10px;
+      background: rgba(0,0,0,.20);
+      cursor:pointer;
+    }
+    .item:hover{border-color: rgba(255,255,255,.16); background: rgba(0,0,0,.25)}
+    .item .t{font-size: 13px; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap}
+    .item .u{font-size: 12px; color: var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; font-family: var(--mono)}
+    .metaRow{display:flex; gap:8px; align-items:center; flex-wrap:wrap}
+    .hint{
+      font-size: 12px; color: var(--muted); line-height: 1.4;
+      padding: 10px; border:1px dashed rgba(255,255,255,.14); border-radius: 12px;
+      background: rgba(0,0,0,.18);
+    }
+
+    .viewer{
+      background: rgba(255,255,255,.03);
+      border:1px solid var(--border);
+      border-radius: var(--radius);
+      overflow:hidden;
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+    }
+    .statusbar{
+      padding: 8px 10px;
+      border-bottom:1px solid var(--border);
+      display:flex;
+      gap:10px;
+      align-items:center;
+      justify-content:space-between;
+      background: linear-gradient(180deg, rgba(255,255,255,.05), transparent);
+      min-height: 40px;
+    }
+    .status{
+      display:flex; gap:10px; align-items:center; flex-wrap:wrap;
+      min-width:0;
+    }
+    .status .url{
+      font-family: var(--mono);
+      font-size: 12px;
+      color: var(--muted);
+      overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      max-width: 60vw;
+    }
+    .dot{
+      width:10px; height:10px; border-radius:999px;
+      background: rgba(255,255,255,.18);
+      box-shadow: 0 0 0 3px rgba(255,255,255,.06);
+    }
+    .dot.ok{background: var(--ok); box-shadow: 0 0 0 3px rgba(82,255,168,.16)}
+    .dot.bad{background: var(--danger); box-shadow: 0 0 0 3px rgba(255,92,122,.16)}
+    .frameWrap{flex:1; min-height:0}
+    iframe{
+      width:100%; height:100%;
+      border:0;
+      background: #0a0d12;
+    }
+    .kbd{font-family: var(--mono); font-size: 11px; padding: 2px 6px; border-radius: 8px; border:1px solid var(--border); background: rgba(0,0,0,.2); color: var(--muted)}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <div class="topbar">
+      <button class="btn" id="backBtn" title="뒤로">
+        ◀ <span class="small">Back</span>
+      </button>
+      <button class="btn" id="fwdBtn" title="앞으로">
+        ▶ <span class="small">Forward</span>
+      </button>
+      <button class="btn" id="reloadBtn" title="새로고침">
+        ⟳ <span class="small">Reload</span>
+      </button>
+
+      <div class="addr">
+        <input id="addrInput" type="text" placeholder="https://example.com  (또는 example.com / 검색어)" />
+        <button class="btn" id="goBtn">Go</button>
+      </div>
+
+      <div class="right">
+        <div class="toggle" title="Direct: iframe 로드 / Fetch+Rewrite: 프록시 통해 HTML 가져와서 읽기 모드로 표시">
+          <button id="modeDirect" class="active">Direct</button>
+          <button id="modeFetch">Fetch+Rewrite</button>
+        </div>
+
+        <button class="btn" id="bookmarkBtn" title="북마크 저장">★ <span class="small">Bookmark</span></button>
+        <span class="pill" title="단축키: Ctrl+L 주소창 포커스">
+          <span class="kbd">Ctrl</span> + <span class="kbd">L</span>
+        </span>
+      </div>
+
+      <div class="addr" style="flex: 1 1 420px;">
+        <input id="proxyInput" type="text" placeholder="(Fetch 모드용) CORS 프록시 URL 템플릿. 예: https://your-proxy.com/?url={url}" />
+      </div>
+    </div>
+
+    <div class="main">
+      <aside class="side">
+        <header>
+          <div class="metaRow">
+            <strong style="font-size:14px;">History & Bookmarks</strong>
+            <span class="pill" id="countsPill">-</span>
+          </div>
+          <button class="btn" id="clearBtn" title="히스토리/북마크 초기화">🧹 Clear</button>
+        </header>
+        <div class="content">
+          <div class="section">
+            <h3>현실적인 한계</h3>
+            <div class="hint">
+              이 페이지 하나로 “진짜 프록시”는 불가합니다. (CORS / X-Frame-Options / CSP 때문에) <br/>
+              <b>Direct</b>는 iframe 허용 사이트만 뜨고, <b>Fetch+Rewrite</b>는 프록시가 있어야 잘 됩니다.
+            </div>
+          </div>
+
+          <div class="section">
+            <h3>Bookmarks</h3>
+            <div class="list" id="bmList"></div>
+          </div>
+
+          <div class="section">
+            <h3>History</h3>
+            <div class="list" id="histList"></div>
+          </div>
+        </div>
+      </aside>
+
+      <section class="viewer">
+        <div class="statusbar">
+          <div class="status">
+            <span class="dot" id="dot"></span>
+            <span id="statusText" class="small">대기 중…</span>
+            <span class="url" id="currentUrlText"></span>
+          </div>
+          <span class="pill" id="modePill">Mode: Direct</span>
+        </div>
+        <div class="frameWrap">
+          <iframe id="frame"
+            sandbox="allow-forms allow-scripts allow-popups allow-downloads allow-top-navigation-by-user-activation"
+            referrerpolicy="no-referrer">
+          </iframe>
+        </div>
+      </section>
+    </div>
+  </div>
+
+<script>
+(() => {
+  const $ = (sel) => document.querySelector(sel);
+
+  const backBtn = $("#backBtn");
+  const fwdBtn  = $("#fwdBtn");
+  const reloadBtn = $("#reloadBtn");
+  const goBtn = $("#goBtn");
+  const addrInput = $("#addrInput");
+  const proxyInput = $("#proxyInput");
+  const bookmarkBtn = $("#bookmarkBtn");
+  const clearBtn = $("#clearBtn");
+
+  const modeDirectBtn = $("#modeDirect");
+  const modeFetchBtn = $("#modeFetch");
+  const modePill = $("#modePill");
+
+  const frame = $("#frame");
+  const dot = $("#dot");
+  const statusText = $("#statusText");
+  const currentUrlText = $("#currentUrlText");
+
+  const bmList = $("#bmList");
+  const histList = $("#histList");
+  const countsPill = $("#countsPill");
+
+  const STORAGE_KEY = "mini_proxyish_browser_v1";
+  const state = loadState();
+
+  // runtime navigation stacks (like a browser)
+  let navBack = state.navBack || [];
+  let navForward = state.navForward || [];
+  let current = state.current || null;
+
+  let mode = state.mode || "direct"; // 'direct' | 'fetch'
+  setModeUI(mode);
+
+  // default helpful placeholder
+  if (!state.proxyTemplate) {
+    state.proxyTemplate = "";
+  }
+  proxyInput.value = state.proxyTemplate;
+
+  // initial render lists
+  renderLists();
+  updateNavButtons();
+  if (current) {
+    addrInput.value = current.url;
+    navigateTo(current.url, {push:false});
+  } else {
+    // show a start page
+    frame.srcdoc = startPageDoc();
+  }
+
+  // ---------- Events ----------
+  goBtn.addEventListener("click", () => go(addrInput.value));
+  addrInput.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") go(addrInput.value);
+  });
+
+  document.addEventListener("keydown", (e) => {
+    if (e.ctrlKey && (e.key === "l" || e.key === "L")) {
+      e.preventDefault();
+      addrInput.focus();
+      addrInput.select();
+    }
+  });
+
+  backBtn.addEventListener("click", () => goBack());
+  fwdBtn.addEventListener("click", () => goForward());
+  reloadBtn.addEventListener("click", () => {
+    if (current) navigateTo(current.url, {push:false, reload:true});
+  });
+
+  bookmarkBtn.addEventListener("click", () => {
+    if (!current) return toastBad("북마크할 페이지가 없어요.");
+    addBookmark(current.url);
+  });
+
+  clearBtn.addEventListener("click", () => {
+    if (!confirm("히스토리/북마크/네비게이션을 전부 지울까요?")) return;
+    navBack = []; navForward = []; current = null;
+    state.bookmarks = [];
+    state.history = [];
+    persist();
+    renderLists();
+    updateNavButtons();
+    frame.srcdoc = startPageDoc("초기화 완료. 새 출발 ㄱㄱ");
+    setStatus("대기 중…", "", "neutral");
+  });
+
+  proxyInput.addEventListener("change", () => {
+    state.proxyTemplate = proxyInput.value.trim();
+    persist();
+  });
+
+  modeDirectBtn.addEventListener("click", () => setMode("direct"));
+  modeFetchBtn.addEventListener("click", () => setMode("fetch"));
+
+  // ---------- Core ----------
+  function go(input) {
+    const url = normalizeInputToUrl(input);
+    addrInput.value = url;
+    navigateTo(url, {push:true});
+  }
+
+  function setMode(next) {
+    mode = next;
+    state.mode = mode;
+    setModeUI(mode);
+    persist();
+    // reload current in new mode
+    if (current) navigateTo(current.url, {push:false, reload:true});
+  }
+
+  function setModeUI(m) {
+    modeDirectBtn.classList.toggle("active", m === "direct");
+    modeFetchBtn.classList.toggle("active", m === "fetch");
+    modePill.textContent = "Mode: " + (m === "direct" ? "Direct" : "Fetch+Rewrite");
+  }
+
+  function navigateTo(url, {push=true, reload=false} = {}) {
+    // update stacks
+    if (push && current && current.url !== url) {
+      navBack.push(current);
+      navForward = [];
+    }
+    current = {url, ts: Date.now()};
+    state.current = current;
+    state.navBack = navBack;
+    state.navForward = navForward;
+
+    addHistory(url);
+    updateNavButtons();
+    renderLists();
+
+    currentUrlText.textContent = url;
+
+    if (mode === "direct") {
+      loadDirect(url, {reload});
+    } else {
+      loadFetchRewrite(url);
+    }
+
+    persist();
+  }
+
+  function goBack() {
+    if (!navBack.length) return;
+    navForward.push(current);
+    current = navBack.pop();
+    state.current = current;
+    state.navBack = navBack;
+    state.navForward = navForward;
+    updateNavButtons();
+    renderLists();
+    addrInput.value = current.url;
+    navigateTo(current.url, {push:false});
+    persist();
+  }
+
+  function goForward() {
+    if (!navForward.length) return;
+    navBack.push(current);
+    current = navForward.pop();
+    state.current = current;
+    state.navBack = navBack;
+    state.navForward = navForward;
+    updateNavButtons();
+    renderLists();
+    addrInput.value = current.url;
+    navigateTo(current.url, {push:false});
+    persist();
+  }
+
+  function updateNavButtons() {
+    backBtn.disabled = navBack.length === 0;
+    fwdBtn.disabled  = navForward.length === 0;
+  }
+
+  // ---------- Loading ----------
+  function loadDirect(url, {reload=false} = {}) {
+    setStatus("Direct 로딩 중… (iframe)", url, "neutral");
+
+    // Best-effort to detect blocked iframe:
+    // many cases won't trigger error events; we'll use a timeout heuristic.
+    let done = false;
+    const t = setTimeout(() => {
+      if (done) return;
+      setStatus("이 사이트는 iframe을 막았을 수 있어요. (X-Frame-Options/CSP) Fetch 모드로 시도해보세요.", url, "bad");
+    }, 3500);
+
+    frame.removeAttribute("srcdoc");
+    frame.onload = () => {
+      done = true;
+      clearTimeout(t);
+      setStatus("로드 완료 (Direct)", url, "ok");
+    };
+    // Some browsers won't fire onerror for iframes reliably.
+    frame.onerror = () => {
+      done = true;
+      clearTimeout(t);
+      setStatus("iframe 로드 실패. Fetch 모드를 고려하세요.", url, "bad");
+    };
+
+    if (reload) {
+      // force reload by cache-busting
+      const bust = "_t=" + Date.now();
+      const u = new URL(url);
+      u.searchParams.set("_t", Date.now());
+      frame.src = u.toString();
+    } else {
+      frame.src = url;
+    }
+  }
+
+  async function loadFetchRewrite(url) {
+    const tpl = (proxyInput.value || "").trim();
+    if (!tpl || !tpl.includes("{url}")) {
+      setStatus("Fetch 모드는 프록시 템플릿이 필요해요. 예: https://your-proxy.com/?url={url}", url, "bad");
+      frame.srcdoc = startPageDoc("Fetch+Rewrite를 쓰려면 상단 프록시 입력칸에 {url} 포함 템플릿을 넣어주세요.");
+      return;
+    }
+    setStatus("Fetch+Rewrite 로딩 중… (프록시 통해 HTML 가져오는 중)", url, "neutral");
+
+    const proxied = tpl.replaceAll("{url}", encodeURIComponent(url));
+    currentUrlText.textContent = url + "  (via proxy)";
+
+    try {
+      const res = await fetch(proxied, {credentials: "omit", mode: "cors"});
+      if (!res.ok) throw new Error("HTTP " + res.status);
+      const html = await res.text();
+
+      const safeDoc = rewriteHtmlToSafeReader(html, url);
+      frame.removeAttribute("src");
+      frame.srcdoc = safeDoc;
+
+      setStatus("로드 완료 (Fetch+Rewrite)", url, "ok");
+    } catch (err) {
+      setStatus("Fetch 실패: " + (err?.message || err), url, "bad");
+      frame.removeAttribute("src");
+      frame.srcdoc = startPageDoc(
+        "Fetch+Rewrite 실패 😵\n" +
+        "가능한 원인:\n" +
+        "- 프록시가 CORS를 허용 안 함\n" +
+        "- 대상 사이트가 봇/스크래핑 방어\n" +
+        "- 프록시가 HTML 대신 다른 포맷 반환\n\n" +
+        "에러: " + (err?.message || err)
+      );
+    }
+  }
+
+  function setStatus(msg, url="", kind="neutral") {
+    statusText.textContent = msg;
+    currentUrlText.textContent = url || currentUrlText.textContent;
+    dot.classList.remove("ok","bad");
+    if (kind === "ok") dot.classList.add("ok");
+    if (kind === "bad") dot.classList.add("bad");
+  }
+
+  function toastBad(msg) {
+    setStatus(msg, current?.url || "", "bad");
+  }
+
+  // ---------- URL normalize ----------
+  function normalizeInputToUrl(input) {
+    let s = (input || "").trim();
+    if (!s) return "about:blank";
+
+    // If it looks like a URL-ish
+    const looksUrl = /^(https?:\/\/|about:|file:|localhost|\d{1,3}(\.\d{1,3}){3}|[\w-]+\.[a-z]{2,})(\/|$)/i.test(s);
+
+    if (!looksUrl) {
+      // treat as search
+      return "https://www.google.com/search?q=" + encodeURIComponent(s);
+    }
+
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(s) && !s.startsWith("about:")) {
+      s = "https://" + s;
+    }
+
+    try {
+      return new URL(s).toString();
+    } catch {
+      // fallback: search it
+      return "https://www.google.com/search?q=" + encodeURIComponent(input.trim());
+    }
+  }
+
+  // ---------- History / Bookmarks ----------
+  function addHistory(url) {
+    state.history = state.history || [];
+    // de-dup head
+    state.history = state.history.filter(x => x.url !== url);
+    state.history.unshift({url, ts: Date.now()});
+    state.history = state.history.slice(0, 40);
+    persist();
+  }
+
+  function addBookmark(url) {
+    state.bookmarks = state.bookmarks || [];
+    const exists = state.bookmarks.some(x => x.url === url);
+    if (exists) return setStatus("이미 북마크에 있어요.", url, "ok");
+    state.bookmarks.unshift({url, ts: Date.now()});
+    state.bookmarks = state.bookmarks.slice(0, 40);
+    persist();
+    renderLists();
+    setStatus("북마크 저장됨 ★", url, "ok");
+  }
+
+  function renderLists() {
+    const bms = state.bookmarks || [];
+    const hist = state.history || [];
+
+    countsPill.textContent = `Bookmarks ${bms.length} · History ${hist.length}`;
+
+    bmList.innerHTML = "";
+    if (!bms.length) {
+      bmList.innerHTML = `<div class="hint">아직 북마크가 없네요. 마음에 드는 페이지에서 ★ 눌러보셈.</div>`;
+    } else {
+      for (const it of bms) bmList.appendChild(makeItem(it, "bookmark"));
+    }
+
+    histList.innerHTML = "";
+    if (!hist.length) {
+      histList.innerHTML = `<div class="hint">히스토리 비었음. 주소 넣고 Go 누르세요.</div>`;
+    } else {
+      for (const it of hist) histList.appendChild(makeItem(it, "history"));
+    }
+  }
+
+  function makeItem(it, type) {
+    const div = document.createElement("div");
+    div.className = "item";
+    div.innerHTML = `
+      <div class="t">${escapeHtml(prettyTitle(it.url))}</div>
+      <div class="u">${escapeHtml(it.url)}</div>
+      <div class="metaRow" style="margin-top:8px;">
+        <span class="pill">${new Date(it.ts).toLocaleString()}</span>
+        <button class="btn" style="padding:6px 8px;" data-act="open">Open</button>
+        <button class="btn" style="padding:6px 8px;" data-act="del">Del</button>
+      </div>
+    `;
+    div.querySelector('[data-act="open"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      addrInput.value = it.url;
+      navigateTo(it.url, {push:true});
+    });
+    div.querySelector('[data-act="del"]').addEventListener("click", (e) => {
+      e.stopPropagation();
+      if (type === "bookmark") {
+        state.bookmarks = (state.bookmarks || []).filter(x => x.url !== it.url);
+      } else {
+        state.history = (state.history || []).filter(x => x.url !== it.url);
+      }
+      persist();
+      renderLists();
+    });
+    div.addEventListener("click", () => {
+      addrInput.value = it.url;
+      navigateTo(it.url, {push:true});
+    });
+    return div;
+  }
+
+  function prettyTitle(url) {
+    try {
+      const u = new URL(url);
+      return u.hostname.replace(/^www\./,"") + u.pathname;
+    } catch {
+      return url;
+    }
+  }
+
+  // ---------- Fetch+Rewrite (Reader Mode) ----------
+  function rewriteHtmlToSafeReader(html, baseUrl) {
+    const parser = new DOMParser();
+    const doc = parser.parseFromString(html, "text/html");
+
+    // Remove risky stuff
+    const removeSelectors = [
+      "script","iframe","object","embed","link[rel=preload]","link[rel=prefetch]","meta[http-equiv='refresh']"
+    ];
+    for (const sel of removeSelectors) {
+      doc.querySelectorAll(sel).forEach(n => n.remove());
+    }
+
+    // Ensure absolute URLs
+    absolutizeAttrs(doc, baseUrl, [
+      ["a","href"],
+      ["img","src"],
+      ["source","src"],
+      ["video","src"],
+      ["audio","src"],
+      ["link","href"],
+      ["form","action"]
+    ]);
+
+    // Make links open "inside" by default? In srcdoc, navigation won't update our address bar anyway.
+    // We'll set target=_blank for safety, but keep href absolute.
+    doc.querySelectorAll("a[href]").forEach(a => {
+      a.setAttribute("target","_blank");
+      a.setAttribute("rel","noopener noreferrer");
+    });
+
+    // Keep the visible content but wrap it into our own safe template
+    const title = doc.querySelector("title")?.textContent?.trim() || baseUrl;
+    const bodyHTML = doc.body ? doc.body.innerHTML : escapeHtml(html);
+
+    const clean = `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <meta name="referrer" content="no-referrer" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>${escapeHtml(title)}</title>
+  <style>
+    body{margin:0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans KR", sans-serif; background:#0b0f14; color:#e8eef6;}
+    .bar{position:sticky; top:0; z-index:10; background:rgba(17,24,38,.9); backdrop-filter: blur(10px); border-bottom:1px solid rgba(255,255,255,.08); padding:10px 12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap}
+    .pill{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; font-size:12px; padding:4px 8px; border:1px solid rgba(255,255,255,.12); border-radius:999px; color:#9fb0c4; background: rgba(0,0,0,.22); max-width: 92vw; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+    .wrap{padding: 14px 16px 40px; max-width: 1100px; margin: 0 auto;}
+    img,video{max-width:100%; height:auto;}
+    a{color:#4cc2ff}
+    hr{border:0; border-top:1px solid rgba(255,255,255,.10); margin:16px 0}
+    pre,code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace; font-size: 13px;}
+    pre{background: rgba(0,0,0,.25); border:1px solid rgba(255,255,255,.10); padding:12px; border-radius:12px; overflow:auto;}
+  </style>
+</head>
+<body>
+  <div class="bar">
+    <span class="pill">Fetch+Rewrite (Reader Mode)</span>
+    <span class="pill">${escapeHtml(baseUrl)}</span>
+    <span class="pill">※ 스크립트 제거됨 · 링크는 새 탭</span>
+  </div>
+  <div class="wrap">
+    ${bodyHTML}
+  </div>
+</body>
+</html>`.trim();
+
+    return clean;
+  }
+
+  function absolutizeAttrs(doc, baseUrl, pairs) {
+    for (const [tag, attr] of pairs) {
+      doc.querySelectorAll(`${tag}[${attr}]`).forEach(el => {
+        const val = el.getAttribute(attr);
+        if (!val) return;
+        // ignore anchors, mailto, javascript
+        if (/^(#|mailto:|tel:|javascript:|data:)/i.test(val)) return;
+        try {
+          const abs = new URL(val, baseUrl).toString();
+          el.setAttribute(attr, abs);
+        } catch {}
+      });
+    }
+  }
+
+  // ---------- Start page ----------
+  function startPageDoc(msg="주소를 입력하고 Go. iframe 막히면 Fetch 모드 ㄱㄱ") {
+    return `
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body{margin:0; height:100vh; display:grid; place-items:center; background:#0b0f14; color:#e8eef6; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Noto Sans KR", sans-serif;}
+    .card{max-width: 760px; padding: 22px; border:1px solid rgba(255,255,255,.10); border-radius: 16px; background: rgba(255,255,255,.03)}
+    h1{margin:0 0 10px; font-size: 18px;}
+    p{margin:0; color:#9fb0c4; line-height:1.6; white-space:pre-line}
+    ul{color:#9fb0c4; line-height:1.6}
+    code{font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono","Courier New", monospace}
+    .tip{margin-top: 12px; padding: 10px; border:1px dashed rgba(255,255,255,.14); border-radius: 12px;}
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Mini “Proxy-ish” Browser</h1>
+    <p>${escapeHtml(msg)}</p>
+    <div class="tip">
+      <ul>
+        <li><b>Direct</b>: iframe로 바로 로드 (막히면 못 뜸)</li>
+        <li><b>Fetch+Rewrite</b>: 프록시로 HTML 받아서 읽기 모드로 표시 (프록시 템플릿 필요: <code>...{url}</code>)</li>
+      </ul>
+    </div>
+  </div>
+</body>
+</html>`.trim();
+  }
+
+  // ---------- Persistence ----------
+  function loadState() {
+    try {
+      return JSON.parse(localStorage.getItem(STORAGE_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  }
+  function persist() {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  }
+
+  // ---------- Utils ----------
+  function escapeHtml(s) {
+    return (s ?? "").toString()
+      .replaceAll("&","&amp;")
+      .replaceAll("<","&lt;")
+      .replaceAll(">","&gt;")
+      .replaceAll('"',"&quot;")
+      .replaceAll("'","&#039;");
+  }
+})();
+</script>
+</body>
+</html>
